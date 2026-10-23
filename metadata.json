@@ -1,0 +1,8 @@
+{
+  "name": "Life Tracker",
+  "description": "A serious personal life-management app for planning daily routines, 7-day cycles, reflections, expenses, and mindfulness.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

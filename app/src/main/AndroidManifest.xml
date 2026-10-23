@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <application
+        android:name="com.example.LifeTrackerApp"
+        android:theme="@style/Theme.MyApplication"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:supportsRtl="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:dataExtractionRules="@xml/data_extraction_rules">
+        <activity
+            android:theme="@style/Theme.MyApplication"
+            android:label="@string/app_name"
+            android:name="com.example.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <activity
+            android:theme="@style/Theme.MyApplication"
+            android:name="com.example.alarm.AlarmActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"/>
+        <receiver
+            android:name="com.example.alarm.WakeUpAlarmReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="com.mohit.lifetracker.ACTION_TRIGGER_ALARM"/>
+                <action android:name="com.mohit.lifetracker.ACTION_TIMETABLE_REMINDER"/>
+                <action android:name="com.mohit.lifetracker.ACTION_STOP_ALARM"/>
+                <action android:name="com.mohit.lifetracker.ACTION_SNOOZE_ALARM"/>
+            </intent-filter>
+        </receiver>
+        <service
+            android:name="com.example.meditation.MeditationAudioService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback"/>
+        <receiver
+            android:name="com.example.widget.LifeTrackerWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+                <action android:name="com.mohit.lifetracker.ACTION_WIDGET_COMPLETE_TASK"/>
+                <action android:name="com.mohit.lifetracker.ACTION_WIDGET_START_MEDITATION"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/life_tracker_widget_info"/>
+        </receiver>
+        <service
+            android:name="com.example.blackscreen.BlackScreenService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="OLED Black screen overlay and floating access dot for display battery saving during audio playback"/>
+        </service>
+    </application>
+</manifest>
