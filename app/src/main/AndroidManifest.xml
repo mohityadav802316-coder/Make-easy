@@ -50,6 +50,7 @@
                 <action android:name="com.mohit.lifetracker.ACTION_TIMETABLE_REMINDER"/>
                 <action android:name="com.mohit.lifetracker.ACTION_STOP_ALARM"/>
                 <action android:name="com.mohit.lifetracker.ACTION_SNOOZE_ALARM"/>
+                <action android:name="com.mohit.lifetracker.ACTION_MY_CONTROL_REMINDER"/>
             </intent-filter>
         </receiver>
         <service

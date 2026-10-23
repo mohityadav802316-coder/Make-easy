@@ -12,9 +12,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +62,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Spa
@@ -207,20 +212,35 @@ private fun SettingsCategoryList(
           )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Column {
-          Text(
-            text = "CONTROL CENTER • सेटिंग्स",
-            color = CyanNeon,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier.weight(1f)
+        ) {
+          Image(
+            painter = painterResource(id = R.drawable.ic_profile_logo),
+            contentDescription = "my mohit profile",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+              .size(42.dp)
+              .clip(CircleShape)
+              .border(1.5.dp, GoldBrass, CircleShape)
           )
-          Text(
-            text = "App Settings & Control",
-            color = TextPrimary,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.ExtraBold
-          )
+          Spacer(modifier = Modifier.width(10.dp))
+          Column {
+            Text(
+              text = "my mohit • सेटिंग्स",
+              color = CyanNeon,
+              fontSize = 11.sp,
+              fontWeight = FontWeight.Bold,
+              letterSpacing = 1.sp
+            )
+            Text(
+              text = "my mohit",
+              color = TextPrimary,
+              fontSize = 20.sp,
+              fontWeight = FontWeight.ExtraBold
+            )
+          }
         }
       }
     }
@@ -366,6 +386,18 @@ private fun SettingsCategoryDetail(
       SettingsCategory.BLACK_SCREEN_MODE -> {
         item {
           com.example.ui.components.BlackScreenSettingsCategory(viewModel = viewModel)
+        }
+      }
+      SettingsCategory.MY_CONTROL -> {
+        item {
+          val config by viewModel.myControlConfig.collectAsState()
+          com.example.ui.screens.mycontrol.MyControlSettingsView(
+            config = config,
+            onUpdateReminder = { enabled, mins -> viewModel.updateMyControlReminder(enabled, mins) },
+            onUpdatePin = { enabled, pin -> viewModel.updateMyControlPin(enabled, pin) },
+            onClearData = { viewModel.clearMyControlData() },
+            onExportJson = { viewModel.exportMyControlJson() }
+          )
         }
       }
       SettingsCategory.GENERAL -> {
@@ -820,9 +852,25 @@ private fun GeneralCategory(viewModel: LifeTrackerViewModel) {
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Column {
-            Text("User Profile & Greeting", color = WarmOffWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Text("Displayed in morning status and voice audio", color = WarmMuted, fontSize = 11.sp)
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.weight(1f)
+          ) {
+            Image(
+              painter = painterResource(id = R.drawable.ic_profile_logo),
+              contentDescription = "my mohit profile",
+              contentScale = ContentScale.Crop,
+              modifier = Modifier
+                .size(46.dp)
+                .clip(CircleShape)
+                .border(1.5.dp, GoldBrass, CircleShape)
+            )
+            Column {
+              Text("my mohit", color = GoldBrass, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+              Text("User Profile & Greeting", color = WarmOffWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+              Text("Displayed in morning status and voice audio", color = WarmMuted, fontSize = 11.sp)
+            }
           }
           IconButton(onClick = { isEditingName = !isEditingName }, modifier = Modifier.size(32.dp)) {
             Icon(Icons.Default.Edit, contentDescription = "Edit Name", tint = GoldBrass, modifier = Modifier.size(16.dp))
@@ -992,6 +1040,13 @@ enum class SettingsCategory(
     hindiTitle = "सिस्टम-वाइड ब्लैक स्क्रीन मोड",
     description = "OLED Pure Black, Floating Dot, 3-Finger Gesture, Screen Off look",
     icon = Icons.Default.VisibilityOff,
+    iconColor = CyanNeon
+  ),
+  MY_CONTROL(
+    title = "My Control",
+    hindiTitle = "माय कंट्रोल (आदत एवं आत्म-नियंत्रण)",
+    description = "Private habit & self-control tracker, daily reminder & privacy PIN",
+    icon = Icons.Default.Security,
     iconColor = CyanNeon
   ),
   GENERAL(

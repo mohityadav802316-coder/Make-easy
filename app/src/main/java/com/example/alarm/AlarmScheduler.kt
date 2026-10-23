@@ -48,6 +48,11 @@ object AlarmScheduler {
   private const val REQUEST_CODE_TIMETABLE_BASE = 10000
   private const val REQUEST_CODE_PRE_REMINDER_BASE = 60000
 
+  const val ACTION_MY_CONTROL_REMINDER = "com.mohit.lifetracker.ACTION_MY_CONTROL_REMINDER"
+  const val MY_CONTROL_CHANNEL_ID = "my_control_reminder_channel"
+  const val NOTIFICATION_ID_MY_CONTROL = 77001
+  private const val REQUEST_CODE_MY_CONTROL = 77001
+
   fun createNotificationChannels(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
@@ -94,7 +99,69 @@ object AlarmScheduler {
         }
         notificationManager.createNotificationChannel(timetableChannel)
       }
+
+      // 3. My Control Neutral Daily Habit Reminder Channel
+      if (notificationManager.getNotificationChannel(MY_CONTROL_CHANNEL_ID) == null) {
+        val myControlChannel = NotificationChannel(
+          MY_CONTROL_CHANNEL_ID,
+          "My Control Reminders",
+          NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+          description = "Neutral daily check-in reminders for My Control"
+          lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
+        }
+        notificationManager.createNotificationChannel(myControlChannel)
+      }
     }
+  }
+
+  fun scheduleMyControlReminder(context: Context, timeMinutes: Int) {
+    createNotificationChannels(context)
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+    val intent = Intent(context, WakeUpAlarmReceiver::class.java).apply {
+      action = ACTION_MY_CONTROL_REMINDER
+    }
+    val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    } else {
+      PendingIntent.FLAG_UPDATE_CURRENT
+    }
+    val pendingIntent = PendingIntent.getBroadcast(context, REQUEST_CODE_MY_CONTROL, intent, flags)
+
+    val now = Calendar.getInstance()
+    val target = Calendar.getInstance().apply {
+      set(Calendar.HOUR_OF_DAY, timeMinutes / 60)
+      set(Calendar.MINUTE, timeMinutes % 60)
+      set(Calendar.SECOND, 0)
+      set(Calendar.MILLISECOND, 0)
+    }
+    if (target.timeInMillis <= now.timeInMillis) {
+      target.add(Calendar.DAY_OF_YEAR, 1)
+    }
+
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, target.timeInMillis, pendingIntent)
+      } else {
+        alarmManager.setExact(AlarmManager.RTC_WAKEUP, target.timeInMillis, pendingIntent)
+      }
+    } catch (_: SecurityException) {
+      alarmManager.set(AlarmManager.RTC_WAKEUP, target.timeInMillis, pendingIntent)
+    }
+  }
+
+  fun cancelMyControlReminder(context: Context) {
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+    val intent = Intent(context, WakeUpAlarmReceiver::class.java).apply {
+      action = ACTION_MY_CONTROL_REMINDER
+    }
+    val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    } else {
+      PendingIntent.FLAG_UPDATE_CURRENT
+    }
+    val pendingIntent = PendingIntent.getBroadcast(context, REQUEST_CODE_MY_CONTROL, intent, flags)
+    alarmManager.cancel(pendingIntent)
   }
 
   fun calculateNextAlarmMillis(

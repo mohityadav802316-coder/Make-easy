@@ -16,6 +16,9 @@ import com.example.data.model.JournalistEntryEntity
 import com.example.data.model.JournalistPersonEntity
 import com.example.data.model.LifeTrackerConverters
 import com.example.data.model.MeditationSessionEntity
+import com.example.data.model.MyControlConfigEntity
+import com.example.data.model.MyControlDayEntity
+import com.example.data.model.MyControlEventEntity
 import com.example.data.model.ReflectionEntity
 import com.example.data.model.RoutineTemplateEntity
 import com.example.data.model.UserSettingsEntity
@@ -37,9 +40,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     ExpenseEntity::class,
     ExpenseCategoryEntity::class,
     ExpenseQuickChipEntity::class,
-    RecurringExpenseEntity::class
+    RecurringExpenseEntity::class,
+    MyControlDayEntity::class,
+    MyControlEventEntity::class,
+    MyControlConfigEntity::class
   ],
-  version = 20,
+  version = 21,
   exportSchema = false
 )
 @TypeConverters(LifeTrackerConverters::class, JournalistConverters::class)
@@ -53,6 +59,7 @@ abstract class LifeTrackerDatabase : RoomDatabase() {
   abstract fun dailyNoteDao(): DailyNoteDao
   abstract fun meditationDao(): MeditationDao
   abstract fun expenseDao(): ExpenseDao
+  abstract fun myControlDao(): MyControlDao
 
   companion object {
     @Volatile
@@ -570,7 +577,70 @@ abstract class LifeTrackerDatabase : RoomDatabase() {
       }
     }
 
-    const val CURRENT_VERSION = 19
+    val MIGRATION_19_20 = object : Migration(19, 20) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        // Schema alignment for version 20
+      }
+    }
+
+    val MIGRATION_20_21 = object : Migration(20, 21) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+          CREATE TABLE IF NOT EXISTS my_control_days (
+            date TEXT PRIMARY KEY NOT NULL,
+            status TEXT NOT NULL,
+            note TEXT,
+            updatedAtEpochMs INTEGER NOT NULL,
+            isRetrospective INTEGER NOT NULL DEFAULT 0,
+            timezoneId TEXT NOT NULL DEFAULT 'UTC'
+          )
+        """.trimIndent())
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_my_control_days_date ON my_control_days (date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_my_control_days_status ON my_control_days (status)")
+
+        db.execSQL("""
+          CREATE TABLE IF NOT EXISTS my_control_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            eventType TEXT NOT NULL,
+            date TEXT NOT NULL,
+            timestampEpochMs INTEGER NOT NULL,
+            status TEXT,
+            previousStatus TEXT,
+            note TEXT,
+            urgeIntensity INTEGER,
+            urgeTrigger TEXT,
+            urgeStrategy TEXT,
+            correctionReason TEXT,
+            timezoneId TEXT NOT NULL DEFAULT 'UTC'
+          )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_my_control_events_date ON my_control_events (date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_my_control_events_timestampEpochMs ON my_control_events (timestampEpochMs)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_my_control_events_eventType ON my_control_events (eventType)")
+
+        db.execSQL("""
+          CREATE TABLE IF NOT EXISTS my_control_config (
+            id INTEGER PRIMARY KEY NOT NULL DEFAULT 1,
+            reminderEnabled INTEGER NOT NULL DEFAULT 0,
+            reminderTimeMinutes INTEGER NOT NULL DEFAULT 1260,
+            privacyPinEnabled INTEGER NOT NULL DEFAULT 0,
+            privacyPin TEXT NOT NULL DEFAULT '',
+            goalTitle TEXT NOT NULL DEFAULT 'Complete a full calendar day without masturbation',
+            promptYesterdayPending INTEGER NOT NULL DEFAULT 1
+          )
+        """.trimIndent())
+        db.execSQL("INSERT OR IGNORE INTO my_control_config (id, reminderEnabled, reminderTimeMinutes, privacyPinEnabled, privacyPin, goalTitle, promptYesterdayPending) VALUES (1, 0, 1260, 0, '', 'Complete a full calendar day without masturbation', 1)")
+      }
+    }
+
+    val MIGRATION_19_21 = object : Migration(19, 21) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        MIGRATION_19_20.migrate(db)
+        MIGRATION_20_21.migrate(db)
+      }
+    }
+
+    const val CURRENT_VERSION = 21
 
     fun getDatabase(context: Context): LifeTrackerDatabase {
       return INSTANCE ?: synchronized(this) {
@@ -598,7 +668,10 @@ abstract class LifeTrackerDatabase : RoomDatabase() {
             MIGRATION_15_16,
             MIGRATION_16_17,
             MIGRATION_17_18,
-            MIGRATION_18_19
+            MIGRATION_18_19,
+            MIGRATION_19_20,
+            MIGRATION_20_21,
+            MIGRATION_19_21
           )
           .fallbackToDestructiveMigrationOnDowngrade()
           .build()

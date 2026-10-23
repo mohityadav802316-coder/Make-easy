@@ -121,6 +121,8 @@ class MainActivity : ComponentActivity() {
       viewModel.setTab(MainTab.MEDITATION)
     } else if (intent?.getBooleanExtra("NAVIGATE_TO_SETTINGS", false) == true) {
       viewModel.setTab(MainTab.SETTINGS)
+    } else if (intent?.getBooleanExtra("NAVIGATE_TO_MY_CONTROL", false) == true) {
+      viewModel.setTab(MainTab.MY_CONTROL)
     }
 
     AlarmScheduler.createNotificationChannels(this)
@@ -141,6 +143,8 @@ class MainActivity : ComponentActivity() {
       viewModel.setTab(MainTab.MEDITATION)
     } else if (intent.getBooleanExtra("NAVIGATE_TO_SETTINGS", false)) {
       viewModel.setTab(MainTab.SETTINGS)
+    } else if (intent.getBooleanExtra("NAVIGATE_TO_MY_CONTROL", false)) {
+      viewModel.setTab(MainTab.MY_CONTROL)
     }
   }
 
@@ -271,6 +275,7 @@ fun LifeTrackerApp(viewModel: LifeTrackerViewModel) {
               MainTab.REFLECTION -> ReflectionScreen(viewModel = viewModel)
               MainTab.TIMELINE -> TimelineScreen(viewModel = viewModel)
               MainTab.EXPENSE_DIARY -> ExpenseDiaryScreen(viewModel = viewModel)
+              MainTab.MY_CONTROL -> com.example.ui.screens.mycontrol.MyControlScreen(viewModel = viewModel)
             }
           }
         }

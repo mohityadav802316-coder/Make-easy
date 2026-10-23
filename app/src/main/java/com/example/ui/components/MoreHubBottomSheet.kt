@@ -1,8 +1,12 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +30,7 @@ import androidx.compose.material.icons.filled.DashboardCustomize
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -97,19 +102,33 @@ fun MoreHubBottomSheet(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        Column {
-          Text(
-            text = "सुविधाएं व हब",
-            color = WarmOffWhite,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Medium
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+          Image(
+            painter = painterResource(id = R.drawable.ic_profile_logo),
+            contentDescription = "my mohit profile",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+              .size(42.dp)
+              .clip(CircleShape)
+              .border(1.5.dp, GoldBrass, CircleShape)
           )
-          Spacer(modifier = Modifier.height(2.dp))
-          Text(
-            text = "आवश्यक टूल्स और दैनिक सुविधाएं",
-            color = WarmMuted,
-            fontSize = 12.sp
-          )
+          Column {
+            Text(
+              text = "my mohit",
+              color = GoldBrass,
+              fontSize = 17.sp,
+              fontWeight = FontWeight.Bold,
+              letterSpacing = 0.5.sp
+            )
+            Text(
+              text = "सुविधाएं व हब • दैनिक टूल्स",
+              color = WarmMuted,
+              fontSize = 12.sp
+            )
+          }
         }
         IconButton(onClick = onDismiss) {
           Icon(Icons.Default.Close, contentDescription = "बंद करें", tint = WarmMuted)
@@ -202,6 +221,10 @@ fun MoreHubBottomSheet(
         HubFeatureItem("टाइमलाइन (Timeline)", "दैनिक इतिहास", Icons.Filled.History) {
           onDismiss()
           onNavigateTab(MainTab.TIMELINE)
+        },
+        HubFeatureItem("My Control", "आदत एवं आत्म-नियंत्रण", Icons.Filled.Security) {
+          onDismiss()
+          onNavigateTab(MainTab.MY_CONTROL)
         },
         HubFeatureItem("खर्च डायरी", "दैनिक खर्च व बजट", Icons.Filled.ReceiptLong) {
           onDismiss()

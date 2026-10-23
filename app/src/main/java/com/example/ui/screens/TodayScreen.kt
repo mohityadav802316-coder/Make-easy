@@ -2,9 +2,13 @@ package com.example.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -205,24 +209,50 @@ fun TodayScreen(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Column {
-            // Muted localized date
-            Text(
-              text = TimeUtils.getHindiDateDisplay(selectedDate),
-              color = WarmMuted,
-              fontSize = 13.sp,
-              fontWeight = FontWeight.Normal
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.weight(1f, fill = false)
+          ) {
+            // In-App Profile / Logo Image with subtle brass border
+            Image(
+              painter = painterResource(id = R.drawable.ic_profile_logo),
+              contentDescription = "my mohit profile",
+              contentScale = ContentScale.Crop,
+              modifier = Modifier
+                .size(46.dp)
+                .clip(CircleShape)
+                .border(1.5.dp, GoldBrass, CircleShape)
+                .clickable { viewModel.setTab(MainTab.SETTINGS) }
+                .testTag("in_app_profile_logo")
             )
-            Spacer(modifier = Modifier.height(2.dp))
-            // Greeting by time of day
-            val greeting = TimeUtils.getHindiGreeting(nowMinutes)
-            val greetingText = if (userName.isNotBlank()) "$greeting, $userName" else greeting
-            Text(
-              text = greetingText,
-              color = WarmOffWhite,
-              fontSize = 22.sp,
-              fontWeight = FontWeight.SemiBold
-            )
+
+            Column {
+              // Exact lowercase in-app branding title
+              Text(
+                text = "my mohit",
+                color = GoldBrass,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp,
+                modifier = Modifier.testTag("in_app_brand_title")
+              )
+              Spacer(modifier = Modifier.height(1.dp))
+              val greeting = TimeUtils.getHindiGreeting(nowMinutes)
+              val greetingText = if (userName.isNotBlank()) "$greeting, $userName" else greeting
+              Text(
+                text = greetingText,
+                color = WarmOffWhite,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+              )
+              Text(
+                text = TimeUtils.getHindiDateDisplay(selectedDate),
+                color = WarmMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Normal
+              )
+            }
           }
 
           // Top right actions: Alarm bell and More hub

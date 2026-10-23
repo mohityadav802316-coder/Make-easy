@@ -29,6 +29,7 @@ import com.example.meditation.MeditationManager
 import com.example.meditation.MeditationState
 import com.example.util.RoutineUtils
 import com.example.util.TimeUtils
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +41,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.example.data.model.TimelineDayRecord
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -55,7 +57,8 @@ enum class MainTab {
   MEDITATION,
   TIMELINE,
   ALARM_CENTER,
-  EXPENSE_DIARY
+  EXPENSE_DIARY,
+  MY_CONTROL
 }
 
 class LifeTrackerViewModel(application: Application) : AndroidViewModel(application) {
@@ -1655,6 +1658,147 @@ class LifeTrackerViewModel(application: Application) : AndroidViewModel(applicat
     viewModelScope.launch {
       repository.updateBlackScreenOverlayActive(false)
       com.example.blackscreen.BlackScreenManager.deactivateBlackOverlay(getApplication())
+    }
+  }
+
+  // =========================================================================
+  // MY CONTROL — PRIVATE HABIT & SELF-CONTROL TRACKER
+  // =========================================================================
+
+  val myControlDays = database.myControlDao().getAllDaysFlow().stateIn(
+    viewModelScope,
+    SharingStarted.WhileSubscribed(5000),
+    emptyList()
+  )
+
+  val myControlEvents = database.myControlDao().getAllEventsFlow().stateIn(
+    viewModelScope,
+    SharingStarted.WhileSubscribed(5000),
+    emptyList()
+  )
+
+  val myControlConfig: StateFlow<com.example.data.model.MyControlConfigEntity> = database.myControlDao().getConfigFlow()
+    .map { it ?: com.example.data.model.MyControlConfigEntity() }
+    .stateIn(
+      viewModelScope,
+      SharingStarted.WhileSubscribed(5000),
+      com.example.data.model.MyControlConfigEntity()
+    )
+
+  val myControlStats: StateFlow<com.example.data.model.MyControlStats> = kotlinx.coroutines.flow.combine(
+    myControlDays,
+    _selectedDate
+  ) { days, _ ->
+    com.example.util.MyControlStreakCalculator.calculateStats(days, todayDate)
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.example.data.model.MyControlStats())
+
+  fun recordMyControlCheckIn(
+    date: String,
+    status: com.example.data.model.GoalStatus,
+    note: String?,
+    isRetrospective: Boolean = false
+  ) {
+    viewModelScope.launch(Dispatchers.IO) {
+      database.myControlDao().recordDailyCheckIn(
+        date = date,
+        status = status,
+        note = note?.trim(),
+        isRetrospective = isRetrospective,
+        timezoneId = java.util.TimeZone.getDefault().id
+      )
+    }
+  }
+
+  fun recordUrgeCheckIn(
+    date: String = todayDate,
+    intensity: Int,
+    trigger: String?,
+    strategy: String?,
+    note: String?
+  ) {
+    viewModelScope.launch(Dispatchers.IO) {
+      database.myControlDao().recordUrgeCheckIn(
+        date = date,
+        intensity = intensity,
+        trigger = trigger,
+        strategy = strategy,
+        note = note?.trim(),
+        timezoneId = java.util.TimeZone.getDefault().id
+      )
+    }
+  }
+
+  fun updateMyControlReminder(enabled: Boolean, timeMinutes: Int) {
+    viewModelScope.launch(Dispatchers.IO) {
+      val current = database.myControlDao().getConfigSync() ?: com.example.data.model.MyControlConfigEntity()
+      database.myControlDao().upsertConfig(
+        current.copy(reminderEnabled = enabled, reminderTimeMinutes = timeMinutes)
+      )
+      if (enabled) {
+        AlarmScheduler.scheduleMyControlReminder(getApplication(), timeMinutes)
+      } else {
+        AlarmScheduler.cancelMyControlReminder(getApplication())
+      }
+    }
+  }
+
+  fun updateMyControlPin(enabled: Boolean, pin: String) {
+    viewModelScope.launch(Dispatchers.IO) {
+      val current = database.myControlDao().getConfigSync() ?: com.example.data.model.MyControlConfigEntity()
+      database.myControlDao().upsertConfig(
+        current.copy(privacyPinEnabled = enabled, privacyPin = pin)
+      )
+    }
+  }
+
+  fun clearMyControlData() {
+    viewModelScope.launch(Dispatchers.IO) {
+      database.myControlDao().clearAllDays()
+      database.myControlDao().clearAllEvents()
+    }
+  }
+
+  suspend fun exportMyControlJson(): String {
+    return kotlinx.coroutines.withContext(Dispatchers.IO) {
+      val days = database.myControlDao().getAllDaysSync()
+      val events = database.myControlDao().getAllEventsSync()
+      val config = database.myControlDao().getConfigSync()
+
+      val json = org.json.JSONObject()
+      json.put("appName", "Life Tracker - My Control")
+      json.put("exportedAtEpochMs", System.currentTimeMillis())
+      json.put("goalTitle", config?.goalTitle ?: "Daily Self-Control")
+
+      val daysArray = org.json.JSONArray()
+      for (d in days) {
+        val o = org.json.JSONObject()
+        o.put("date", d.date)
+        o.put("status", d.status.name)
+        o.put("note", d.note ?: "")
+        o.put("updatedAtEpochMs", d.updatedAtEpochMs)
+        o.put("isRetrospective", d.isRetrospective)
+        daysArray.put(o)
+      }
+      json.put("days", daysArray)
+
+      val eventsArray = org.json.JSONArray()
+      for (e in events) {
+        val o = org.json.JSONObject()
+        o.put("id", e.id)
+        o.put("eventType", e.eventType.name)
+        o.put("date", e.date)
+        o.put("timestampEpochMs", e.timestampEpochMs)
+        o.put("status", e.status?.name ?: "")
+        o.put("previousStatus", e.previousStatus?.name ?: "")
+        o.put("note", e.note ?: "")
+        o.put("urgeIntensity", e.urgeIntensity ?: 0)
+        o.put("urgeTrigger", e.urgeTrigger ?: "")
+        o.put("urgeStrategy", e.urgeStrategy ?: "")
+        eventsArray.put(o)
+      }
+      json.put("events", eventsArray)
+
+      json.toString(2)
     }
   }
 }

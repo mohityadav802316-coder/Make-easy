@@ -18,6 +18,22 @@ class ExampleRobolectricTest {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
     assertEquals("Life Tracker", appName)
+
+    val inAppBrand = context.getString(R.string.in_app_brand_name)
+    assertEquals("my mohit", inAppBrand)
+  }
+
+  @Test
+  fun `verify in-app profile logo drawable exists`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val drawable = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_profile_logo)
+    org.junit.Assert.assertNotNull("ic_profile_logo drawable must exist and be loadable", drawable)
+
+    val launcherIcon = androidx.core.content.ContextCompat.getDrawable(context, R.mipmap.ic_launcher)
+    org.junit.Assert.assertNotNull("ic_launcher must exist and be loadable", launcherIcon)
+
+    val launcherRound = androidx.core.content.ContextCompat.getDrawable(context, R.mipmap.ic_launcher_round)
+    org.junit.Assert.assertNotNull("ic_launcher_round must exist and be loadable", launcherRound)
   }
 
   @Test

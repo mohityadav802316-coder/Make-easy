@@ -217,4 +217,17 @@ class LifeTrackerConverters {
 
   @TypeConverter
   fun toReflectionCategory(value: String): ReflectionCategory = ReflectionCategory.fromString(value)
+
+  @TypeConverter
+  fun fromGoalStatus(status: GoalStatus?): String = status?.name ?: GoalStatus.PENDING.name
+
+  @TypeConverter
+  fun toGoalStatus(value: String?): GoalStatus = GoalStatus.fromString(value)
+
+  @TypeConverter
+  fun fromMyControlEventType(type: MyControlEventType?): String = type?.name ?: MyControlEventType.DAILY_CHECKIN.name
+
+  @TypeConverter
+  fun toMyControlEventType(value: String?): MyControlEventType =
+    MyControlEventType.entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: MyControlEventType.DAILY_CHECKIN
 }

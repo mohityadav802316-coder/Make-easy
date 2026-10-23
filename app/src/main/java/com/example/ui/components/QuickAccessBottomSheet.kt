@@ -1,8 +1,12 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +29,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.RateReview
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -72,6 +77,17 @@ fun QuickAccessBottomSheet(
   sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 ) {
   val items = listOf(
+    QuickAccessItem(
+      id = "my_control",
+      title = "My Control",
+      subtitle = "आदत एवं आत्म-नियंत्रण",
+      icon = Icons.Default.Security,
+      iconColor = CyanNeon,
+      onClick = {
+        onDismiss()
+        onNavigateTab(MainTab.MY_CONTROL)
+      }
+    ),
     QuickAccessItem(
       id = "expenses",
       title = "Expense Diary",
@@ -181,20 +197,34 @@ fun QuickAccessBottomSheet(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        Column {
-          Text(
-            text = "QUICK ACCESS HUB",
-            color = CyanNeon,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+          Image(
+            painter = painterResource(id = R.drawable.ic_profile_logo),
+            contentDescription = "my mohit profile",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+              .size(40.dp)
+              .clip(CircleShape)
+              .border(1.5.dp, CyanNeon, CircleShape)
           )
-          Text(
-            text = "Tools & Features",
-            color = TextPrimary,
-            fontSize = 19.sp,
-            fontWeight = FontWeight.ExtraBold
-          )
+          Column {
+            Text(
+              text = "my mohit",
+              color = TextPrimary,
+              fontSize = 19.sp,
+              fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+              text = "QUICK ACCESS HUB • टूल्स",
+              color = CyanNeon,
+              fontSize = 10.sp,
+              fontWeight = FontWeight.Bold,
+              letterSpacing = 1.sp
+            )
+          }
         }
 
         IconButton(

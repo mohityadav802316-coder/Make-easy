@@ -18,6 +18,11 @@ object TimeUtils {
    * Formats minutes from midnight (0..1439) into strictly 12-hour AM/PM format.
    * e.g., 300 -> "5:00 AM", 780 -> "1:00 PM", 1320 -> "10:00 PM"
    */
+  fun formatDate(epochMs: Long, pattern: String = "hh:mm a"): String {
+    val sdf = SimpleDateFormat(pattern, Locale.US)
+    return sdf.format(Date(epochMs))
+  }
+
   fun formatDuration(durationMs: Long): String {
     val totalSeconds = (durationMs / 1000).coerceAtLeast(0L)
     val minutes = totalSeconds / 60

@@ -47,6 +47,9 @@ class WakeUpAlarmReceiver : BroadcastReceiver() {
           AlarmScheduler.scheduleSnooze(context, snoozeMins)
         }
       }
+      AlarmScheduler.ACTION_MY_CONTROL_REMINDER -> {
+        handleMyControlReminder(context)
+      }
       Intent.ACTION_BOOT_COMPLETED -> {
         handleBootCompleted(context)
       }
@@ -334,8 +337,50 @@ class WakeUpAlarmReceiver : BroadcastReceiver() {
 
         // Restore OLED Black Screen Mode & Floating Control if configured
         com.example.blackscreen.BlackScreenManager.onBootCompleted(context)
+
+        // Reschedule My Control reminder if enabled
+        val myControlConfig = db.myControlDao().getConfigSync()
+        if (myControlConfig?.reminderEnabled == true) {
+          AlarmScheduler.scheduleMyControlReminder(context, myControlConfig.reminderTimeMinutes)
+        }
       } catch (e: Exception) {
         Log.e("WakeUpAlarmReceiver", "Failed to reschedule alarms after boot", e)
+      }
+    }
+  }
+
+  private fun handleMyControlReminder(context: Context) {
+    AlarmScheduler.createNotificationChannels(context)
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+
+    val openIntent = Intent(context, com.example.MainActivity::class.java).apply {
+      flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+      putExtra("NAVIGATE_TO_MY_CONTROL", true)
+    }
+    val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    } else {
+      PendingIntent.FLAG_UPDATE_CURRENT
+    }
+    val pendingIntent = PendingIntent.getActivity(context, 77002, openIntent, flags)
+
+    val notification = NotificationCompat.Builder(context, AlarmScheduler.MY_CONTROL_CHANNEL_ID)
+      .setSmallIcon(R.mipmap.ic_launcher)
+      .setContentTitle("My Control")
+      .setContentText("Your My Control daily check-in is ready.")
+      .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+      .setAutoCancel(true)
+      .setContentIntent(pendingIntent)
+      .build()
+
+    notificationManager.notify(AlarmScheduler.NOTIFICATION_ID_MY_CONTROL, notification)
+
+    // Automatically reschedule for next calendar day
+    CoroutineScope(Dispatchers.IO).launch {
+      val db = LifeTrackerDatabase.getDatabase(context)
+      val config = db.myControlDao().getConfigSync()
+      if (config?.reminderEnabled == true) {
+        AlarmScheduler.scheduleMyControlReminder(context, config.reminderTimeMinutes)
       }
     }
   }
