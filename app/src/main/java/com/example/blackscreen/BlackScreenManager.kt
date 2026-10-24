@@ -250,9 +250,34 @@ object BlackScreenManager {
   }
 
   /**
-   * Persists dragged floating dot coordinates to Room DB.
+   * Notifies the background service that floating button customization or layout preferences changed.
    */
-  fun saveDotPosition(context: Context, x: Int, y: Int) {
+  fun notifyConfigChanged(context: Context) {
+    if (!canDrawOverlays(context)) return
+    try {
+      val intent = Intent(context, BlackScreenService::class.java).apply {
+        action = ACTION_UPDATE_CONFIG
+      }
+      context.startService(intent)
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to send ACTION_UPDATE_CONFIG to service", e)
+    }
+  }
+
+  /**
+   * Persists dragged floating dot coordinates to Room DB and SharedPreferences.
+   */
+  fun saveDotPosition(
+    context: Context,
+    x: Int,
+    y: Int,
+    preferredEdge: String = "RIGHT",
+    verticalRatio: Float = 0.35f
+  ) {
+    // 1. SharedPreferences fast sync
+    FloatingButtonPreferences.savePosition(context, x, y, preferredEdge, verticalRatio)
+
+    // 2. Room DB persistence
     CoroutineScope(Dispatchers.IO).launch {
       try {
         val db = LifeTrackerDatabase.getDatabase(context)

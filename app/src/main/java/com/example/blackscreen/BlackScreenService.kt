@@ -1,5 +1,8 @@
 package com.example.blackscreen
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.PendingIntent
@@ -27,6 +30,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
@@ -59,8 +63,9 @@ class BlackScreenService : Service() {
   private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
   private lateinit var windowManager: WindowManager
 
-  private var floatingDotView: View? = null
+  private var floatingDotView: FrameLayout? = null
   private var floatingDotParams: WindowManager.LayoutParams? = null
+  private var snapAnimator: ValueAnimator? = null
 
   private var blackOverlayView: FrameLayout? = null
   private var blackOverlayParams: WindowManager.LayoutParams? = null
@@ -212,8 +217,58 @@ class BlackScreenService : Service() {
   }
 
   // =========================================================================
-  // FLOATING CONTROL DOT
   // =========================================================================
+  // FLOATING CONTROL BUTTON (SMART EDGE-SNAP & FULL CUSTOMIZATION)
+  // =========================================================================
+
+  private data class SafeScreenBounds(
+    val left: Int,
+    val top: Int,
+    val right: Int,
+    val bottom: Int,
+    val width: Int,
+    val height: Int
+  )
+
+  private fun getSafeScreenBounds(): SafeScreenBounds {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      try {
+        val wm = windowManager.currentWindowMetrics
+        val bounds = wm.bounds
+        val insets = wm.windowInsets.getInsetsIgnoringVisibility(
+          WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout()
+        )
+        SafeScreenBounds(
+          left = insets.left,
+          top = insets.top,
+          right = bounds.width() - insets.right,
+          bottom = bounds.height() - insets.bottom,
+          width = bounds.width(),
+          height = bounds.height()
+        )
+      } catch (_: Exception) {
+        val dm = resources.displayMetrics
+        SafeScreenBounds(
+          left = dpToPx(8f),
+          top = dpToPx(32f),
+          right = dm.widthPixels - dpToPx(8f),
+          bottom = dm.heightPixels - dpToPx(48f),
+          width = dm.widthPixels,
+          height = dm.heightPixels
+        )
+      }
+    } else {
+      val dm = resources.displayMetrics
+      SafeScreenBounds(
+        left = dpToPx(8f),
+        top = dpToPx(28f),
+        right = dm.widthPixels - dpToPx(8f),
+        bottom = dm.heightPixels - dpToPx(48f),
+        width = dm.widthPixels,
+        height = dm.heightPixels
+      )
+    }
+  }
 
   @SuppressLint("ClickableViewAccessibility")
   private fun showFloatingDot() {
@@ -224,12 +279,23 @@ class BlackScreenService : Service() {
       return
     }
 
-    val settings = currentSettings
-    val dotSizeDp = settings?.blackScreenDotSize ?: 36
-    val dotSizePx = dpToPx(dotSizeDp.toFloat())
-    val opacity = settings?.blackScreenDotOpacity ?: 0.45f
-    val initialX = settings?.blackScreenDotX ?: 80
-    val initialY = settings?.blackScreenDotY ?: 260
+    val config = FloatingButtonPreferences.getConfig(applicationContext)
+    val buttonSizeDp = config.sizeDp
+    val buttonSizePx = dpToPx(buttonSizeDp.toFloat())
+    val opacity = config.opacity
+    val colorInt = config.parsedColor
+
+    val bounds = getSafeScreenBounds()
+    val insetPx = dpToPx(config.edgeInsetDp.toFloat())
+
+    val minX = bounds.left + insetPx
+    val maxX = (bounds.right - buttonSizePx - insetPx).coerceAtLeast(minX)
+    val minY = bounds.top + insetPx
+    val maxY = (bounds.bottom - buttonSizePx - insetPx).coerceAtLeast(minY)
+
+    val initialX = if (config.preferredEdge == "LEFT") minX else maxX
+    val totalHeight = (maxY - minY).coerceAtLeast(1)
+    val initialY = (minY + totalHeight * config.verticalRatio).toInt().coerceIn(minY, maxY)
 
     val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -239,8 +305,8 @@ class BlackScreenService : Service() {
     }
 
     val params = WindowManager.LayoutParams(
-      dotSizePx,
-      dotSizePx,
+      buttonSizePx,
+      buttonSizePx,
       layoutFlag,
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
@@ -253,18 +319,40 @@ class BlackScreenService : Service() {
 
     floatingDotParams = params
 
-    // Create custom styled dot view
-    val dot = View(this).apply {
-      val drawable = GradientDrawable().apply {
+    // Create container frame layout for button
+    val container = FrameLayout(this).apply {
+      val r = Color.red(colorInt)
+      val g = Color.green(colorInt)
+      val b = Color.blue(colorInt)
+      val bgDrawable = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
-        setColor(Color.argb((opacity * 255).toInt(), 0, 229, 255)) // Subtle Cyan Glow
-        setStroke(dpToPx(1.5f), Color.argb((opacity * 255).toInt(), 255, 255, 255))
+        setColor(Color.argb((opacity * 255).toInt(), r, g, b))
+        val strokeAlpha = (opacity * 255).toInt().coerceIn(120, 255)
+        setStroke(dpToPx(1.5f), Color.argb(strokeAlpha, 255, 255, 255))
       }
-      background = drawable
+      background = bgDrawable
       elevation = dpToPx(6f).toFloat()
     }
 
-    // Touch and drag listener with tap/double tap/long press detection
+    // Centered TextView for emoji
+    val emojiTextView = TextView(this).apply {
+      gravity = Gravity.CENTER
+      if (config.isClassicDot) {
+        text = ""
+      } else {
+        text = config.emoji
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, (buttonSizeDp * 0.42f))
+      }
+    }
+    val textParams = FrameLayout.LayoutParams(
+      FrameLayout.LayoutParams.MATCH_PARENT,
+      FrameLayout.LayoutParams.MATCH_PARENT
+    ).apply {
+      gravity = Gravity.CENTER
+    }
+    container.addView(emojiTextView, textParams)
+
+    // Touch and drag listener with tap/double tap/long press detection and edge-snap
     var initialTouchX = 0f
     var initialTouchY = 0f
     var initialParamX = 0
@@ -287,9 +375,10 @@ class BlackScreenService : Service() {
       }
     }
 
-    dot.setOnTouchListener { _, event ->
+    container.setOnTouchListener { _, event ->
       when (event.action) {
         MotionEvent.ACTION_DOWN -> {
+          snapAnimator?.cancel()
           touchDownTime = System.currentTimeMillis()
           initialTouchX = event.rawX
           initialTouchY = event.rawY
@@ -303,13 +392,16 @@ class BlackScreenService : Service() {
         MotionEvent.ACTION_MOVE -> {
           val dx = event.rawX - initialTouchX
           val dy = event.rawY - initialTouchY
-          if (hypot(dx, dy) > 18f) {
+          if (hypot(dx, dy) > 16f) {
             isDragging = true
             longPressHandler.removeCallbacks(longPressRunnable)
-            params.x = (initialParamX + dx).toInt()
-            params.y = (initialParamY + dy).toInt()
+            val currentBounds = getSafeScreenBounds()
+            val newX = (initialParamX + dx).toInt().coerceIn(0, currentBounds.width - params.width)
+            val newY = (initialParamY + dy).toInt().coerceIn(0, currentBounds.height - params.height)
+            params.x = newX
+            params.y = newY
             try {
-              windowManager.updateViewLayout(dot, params)
+              windowManager.updateViewLayout(container, params)
             } catch (e: Exception) {
               Log.e(TAG, "Error updating floating dot layout", e)
             }
@@ -321,8 +413,15 @@ class BlackScreenService : Service() {
           val duration = System.currentTimeMillis() - touchDownTime
 
           if (isDragging) {
-            // Drag completed -> persist position
-            BlackScreenManager.saveDotPosition(applicationContext, params.x, params.y)
+            // Drag completed -> snap to nearest left or right edge!
+            val currentConfig = FloatingButtonPreferences.getConfig(applicationContext)
+            snapToNearestEdge(
+              buttonWidth = params.width,
+              buttonHeight = params.height,
+              currentX = params.x,
+              currentY = params.y,
+              insetDp = currentConfig.edgeInsetDp
+            )
           } else if (!longPressTriggered && duration < 350L) {
             // Detected click
             val currentTime = System.currentTimeMillis()
@@ -343,7 +442,6 @@ class BlackScreenService : Service() {
                 }
               }
               else -> {
-                // Long press mode -> single click gives gentle haptic indication
                 performHapticFeedback()
               }
             }
@@ -352,6 +450,16 @@ class BlackScreenService : Service() {
         }
         MotionEvent.ACTION_CANCEL -> {
           longPressHandler.removeCallbacks(longPressRunnable)
+          if (isDragging) {
+            val currentConfig = FloatingButtonPreferences.getConfig(applicationContext)
+            snapToNearestEdge(
+              buttonWidth = params.width,
+              buttonHeight = params.height,
+              currentX = params.x,
+              currentY = params.y,
+              insetDp = currentConfig.edgeInsetDp
+            )
+          }
           true
         }
         else -> false
@@ -359,8 +467,8 @@ class BlackScreenService : Service() {
     }
 
     try {
-      windowManager.addView(dot, params)
-      floatingDotView = dot
+      windowManager.addView(container, params)
+      floatingDotView = container
       BlackScreenManager.setFloatingDotShowing(true)
       Log.d(TAG, "Floating dot added successfully")
     } catch (e: Exception) {
@@ -368,33 +476,115 @@ class BlackScreenService : Service() {
     }
   }
 
-  private fun updateFloatingDotAppearance() {
-    val dot = floatingDotView ?: return
-    val params = floatingDotParams ?: return
-    val settings = currentSettings ?: return
+  private fun snapToNearestEdge(
+    buttonWidth: Int,
+    buttonHeight: Int,
+    currentX: Int,
+    currentY: Int,
+    insetDp: Int
+  ) {
+    val bounds = getSafeScreenBounds()
+    val insetPx = dpToPx(insetDp.toFloat())
 
-    val dotSizeDp = settings.blackScreenDotSize
+    val minX = bounds.left + insetPx
+    val maxX = (bounds.right - buttonWidth - insetPx).coerceAtLeast(minX)
+
+    val minY = bounds.top + insetPx
+    val maxY = (bounds.bottom - buttonHeight - insetPx).coerceAtLeast(minY)
+
+    val clampedY = currentY.coerceIn(minY, maxY)
+
+    val buttonCenterX = currentX + buttonWidth / 2
+    val screenMidX = bounds.width / 2
+
+    val (targetX, preferredEdge) = if (buttonCenterX < screenMidX) {
+      minX to "LEFT"
+    } else {
+      maxX to "RIGHT"
+    }
+
+    val totalAvailableHeight = (maxY - minY).coerceAtLeast(1)
+    val verticalRatio = (clampedY - minY).toFloat() / totalAvailableHeight
+
+    snapAnimator?.cancel()
+    val params = floatingDotParams ?: return
+    val view = floatingDotView ?: return
+
+    val startX = params.x
+    val startY = params.y
+
+    snapAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+      duration = 240L
+      interpolator = DecelerateInterpolator(1.5f)
+      addUpdateListener { va ->
+        val fraction = va.animatedFraction
+        params.x = (startX + (targetX - startX) * fraction).toInt()
+        params.y = (startY + (clampedY - startY) * fraction).toInt()
+        try {
+          windowManager.updateViewLayout(view, params)
+        } catch (e: Exception) {
+          Log.e(TAG, "Error animating snap layout", e)
+        }
+      }
+      addListener(object : AnimatorListenerAdapter() {
+        override fun onAnimationEnd(animation: Animator) {
+          params.x = targetX
+          params.y = clampedY
+          try {
+            windowManager.updateViewLayout(view, params)
+          } catch (_: Exception) {}
+          BlackScreenManager.saveDotPosition(applicationContext, targetX, clampedY, preferredEdge, verticalRatio)
+        }
+      })
+      start()
+    }
+  }
+
+  private fun updateFloatingDotAppearance() {
+    val container = floatingDotView ?: return
+    val params = floatingDotParams ?: return
+    val config = FloatingButtonPreferences.getConfig(applicationContext)
+
+    val dotSizeDp = config.sizeDp
     val dotSizePx = dpToPx(dotSizeDp.toFloat())
-    val opacity = settings.blackScreenDotOpacity
+    val opacity = config.opacity
+    val colorInt = config.parsedColor
 
     params.width = dotSizePx
     params.height = dotSizePx
 
-    val drawable = GradientDrawable().apply {
+    val r = Color.red(colorInt)
+    val g = Color.green(colorInt)
+    val b = Color.blue(colorInt)
+
+    val bgDrawable = GradientDrawable().apply {
       shape = GradientDrawable.OVAL
-      setColor(Color.argb((opacity * 255).toInt(), 0, 229, 255))
-      setStroke(dpToPx(1.5f), Color.argb((opacity * 255).toInt(), 255, 255, 255))
+      setColor(Color.argb((opacity * 255).toInt(), r, g, b))
+      val strokeAlpha = (opacity * 255).toInt().coerceIn(120, 255)
+      setStroke(dpToPx(1.5f), Color.argb(strokeAlpha, 255, 255, 255))
     }
-    dot.background = drawable
+    container.background = bgDrawable
+
+    val textView = container.getChildAt(0) as? TextView
+    if (textView != null) {
+      if (config.isClassicDot) {
+        textView.text = ""
+      } else {
+        textView.text = config.emoji
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, (dotSizeDp * 0.42f))
+      }
+    }
 
     try {
-      windowManager.updateViewLayout(dot, params)
+      windowManager.updateViewLayout(container, params)
     } catch (e: Exception) {
       Log.e(TAG, "Failed to update floating dot appearance", e)
     }
   }
 
   private fun hideFloatingDot() {
+    snapAnimator?.cancel()
+    snapAnimator = null
     floatingDotView?.let {
       try {
         windowManager.removeView(it)
@@ -404,6 +594,59 @@ class BlackScreenService : Service() {
       floatingDotView = null
       floatingDotParams = null
       BlackScreenManager.setFloatingDotShowing(false)
+    }
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    Log.d(TAG, "onConfigurationChanged orientation=${newConfig.orientation}")
+
+    // Update full black screen overlay bounds if active
+    val overlay = blackOverlayView
+    val overlayParams = blackOverlayParams
+    if (overlay != null && overlayParams != null) {
+      val (newWidth, newHeight) = getRealDisplayBounds()
+      overlayParams.width = newWidth
+      overlayParams.height = newHeight
+      try {
+        windowManager.updateViewLayout(overlay, overlayParams)
+        Log.d(TAG, "Updated black overlay layout after rotation: $newWidth x $newHeight")
+      } catch (e: Exception) {
+        Log.e(TAG, "Failed to update black overlay on configuration change", e)
+      }
+    }
+
+    // Reposition floating button smoothly respecting new orientation & insets
+    mainHandler.postDelayed({
+      repositionFloatingButtonForScreenChange()
+    }, 120L)
+  }
+
+  private fun repositionFloatingButtonForScreenChange() {
+    val params = floatingDotParams ?: return
+    val view = floatingDotView ?: return
+    val config = FloatingButtonPreferences.getConfig(applicationContext)
+
+    val bounds = getSafeScreenBounds()
+    val insetPx = dpToPx(config.edgeInsetDp.toFloat())
+    val buttonWidth = params.width
+    val buttonHeight = params.height
+
+    val minX = bounds.left + insetPx
+    val maxX = (bounds.right - buttonWidth - insetPx).coerceAtLeast(minX)
+    val minY = bounds.top + insetPx
+    val maxY = (bounds.bottom - buttonHeight - insetPx).coerceAtLeast(minY)
+
+    val targetX = if (config.preferredEdge == "LEFT") minX else maxX
+    val totalAvailableHeight = (maxY - minY).coerceAtLeast(1)
+    val targetY = (minY + (totalAvailableHeight * config.verticalRatio)).toInt().coerceIn(minY, maxY)
+
+    params.x = targetX
+    params.y = targetY
+    try {
+      windowManager.updateViewLayout(view, params)
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to reposition floating dot on config change", e)
     }
   }
 
@@ -421,23 +664,6 @@ class BlackScreenService : Service() {
       @Suppress("DEPRECATION")
       windowManager.defaultDisplay.getRealSize(point)
       Pair(point.x, point.y)
-    }
-  }
-
-  override fun onConfigurationChanged(newConfig: Configuration) {
-    super.onConfigurationChanged(newConfig)
-    val overlay = blackOverlayView
-    val params = blackOverlayParams
-    if (overlay != null && params != null) {
-      val (newWidth, newHeight) = getRealDisplayBounds()
-      params.width = newWidth
-      params.height = newHeight
-      try {
-        windowManager.updateViewLayout(overlay, params)
-        Log.d(TAG, "Updated black overlay layout after rotation: $newWidth x $newHeight")
-      } catch (e: Exception) {
-        Log.e(TAG, "Failed to update black overlay on configuration change", e)
-      }
     }
   }
 

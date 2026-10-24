@@ -16,18 +16,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.FormatPaint
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
@@ -41,12 +46,16 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.example.blackscreen.FloatingButtonPreferences
+import com.example.blackscreen.FloatingButtonConfig
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -80,6 +89,7 @@ import com.example.ui.theme.TextSecondary
 import com.example.ui.viewmodel.LifeTrackerViewModel
 import com.example.util.BatteryOptimizationHelper
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BlackScreenSettingsCategory(
   viewModel: LifeTrackerViewModel
@@ -104,6 +114,10 @@ fun BlackScreenSettingsCategory(
 
   val hasOverlayPermission = BlackScreenManager.canDrawOverlays(context)
   var showTestGestureDialog by remember { mutableStateOf(false) }
+
+  remember { FloatingButtonPreferences.init(context) }
+  val floatingConfig by FloatingButtonPreferences.configFlow.collectAsState()
+  var customEmojiInput by remember { mutableStateOf("") }
 
   if (showTestGestureDialog) {
     TestGestureDialog(
@@ -233,7 +247,7 @@ fun BlackScreenSettingsCategory(
       }
     }
 
-    // 2. SYSTEM-WIDE FLOATING CONTROL DOT
+    // 2. SYSTEM-WIDE FLOATING CONTROL BUTTON (SMART EDGE-SNAP & CUSTOMIZATION)
     Box(
       modifier = Modifier
         .fillMaxWidth()
@@ -242,16 +256,22 @@ fun BlackScreenSettingsCategory(
         .border(1.dp, DarkSurfaceBorder, RoundedCornerShape(18.dp))
         .padding(16.dp)
     ) {
-      Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+      Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // Toggle Switch
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Column {
-            Text("System-Wide Floating Dot", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+          Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(Icons.Default.TouchApp, contentDescription = null, tint = CyanNeon, modifier = Modifier.size(18.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Floating Black Screen Button", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
-              text = if (isDotEnabled) "Visible over home screen & other apps" else "Hidden",
+              text = if (isDotEnabled) "Active overlay • Auto-snaps to left/right edge" else "Disabled",
               color = TextMuted,
               fontSize = 12.sp
             )
@@ -265,95 +285,353 @@ fun BlackScreenSettingsCategory(
         }
 
         AnimatedVisibility(visible = isDotEnabled) {
-          Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            // Activation Method
-            Text("Activation Gesture on Dot:", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-              val methods = listOf("TAP" to "Single Tap", "DOUBLE_TAP" to "Double Tap", "LONG_PRESS" to "Long Press")
-              methods.forEach { (key, label) ->
-                val isSelected = activationMethod == key
+          Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+
+            // A. INTERACTIVE LIVE PREVIEW
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text("Live Style Preview", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("Tap preview to switch edge", color = TextMuted, fontSize = 11.sp)
+              }
+
+              val previewColor = remember(floatingConfig.colorHex) {
+                try {
+                  Color(android.graphics.Color.parseColor(floatingConfig.colorHex))
+                } catch (_: Exception) {
+                  CyanNeon
+                }
+              }
+
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(96.dp)
+                  .clip(RoundedCornerShape(14.dp))
+                  .background(Color(0xFF0C0E14))
+                  .border(1.dp, DarkSurfaceBorder, RoundedCornerShape(14.dp))
+                  .clickable {
+                    val newEdge = if (floatingConfig.preferredEdge == "LEFT") "RIGHT" else "LEFT"
+                    FloatingButtonPreferences.updateEdge(context, newEdge)
+                  }
+                  .padding(horizontal = floatingConfig.edgeInsetDp.dp, vertical = 8.dp),
+                contentAlignment = if (floatingConfig.preferredEdge == "LEFT") Alignment.CenterStart else Alignment.CenterEnd
+              ) {
                 Box(
                   modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (isSelected) CyanNeon.copy(alpha = 0.2f) else DarkSurface)
-                    .border(1.dp, if (isSelected) CyanNeon else DarkSurfaceBorder, RoundedCornerShape(10.dp))
-                    .clickable { viewModel.setBlackScreenActivationMethod(key) }
-                    .padding(vertical = 10.dp),
+                    .size(floatingConfig.sizeDp.dp)
+                    .clip(CircleShape)
+                    .background(previewColor.copy(alpha = floatingConfig.opacity))
+                    .border(1.5.dp, previewColor, CircleShape),
                   contentAlignment = Alignment.Center
                 ) {
-                  Text(
-                    text = label,
-                    color = if (isSelected) CyanNeon else TextSecondary,
-                    fontSize = 11.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                  )
+                  if (floatingConfig.isClassicDot) {
+                    Box(
+                      modifier = Modifier
+                        .size((floatingConfig.sizeDp * 0.4f).dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                    )
+                  } else {
+                    Text(
+                      text = floatingConfig.emoji,
+                      fontSize = (floatingConfig.sizeDp * 0.48f).sp
+                    )
+                  }
                 }
               }
             }
 
-            // Dot Size Selector
-            Text("Dot Size: ${dotSize}dp", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-              val sizes = listOf(28 to "Small (28)", 36 to "Medium (36)", 48 to "Large (48)")
-              sizes.forEach { (sz, label) ->
-                val isSelected = dotSize == sz
-                Box(
-                  modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (isSelected) CyanNeon.copy(alpha = 0.2f) else DarkSurface)
-                    .border(1.dp, if (isSelected) CyanNeon else DarkSurfaceBorder, RoundedCornerShape(10.dp))
-                    .clickable { viewModel.setBlackScreenDotSize(sz) }
-                    .padding(vertical = 8.dp),
-                  contentAlignment = Alignment.Center
-                ) {
-                  Text(
-                    text = label,
-                    color = if (isSelected) CyanNeon else TextSecondary,
-                    fontSize = 11.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                  )
+            // B. BUILT-IN ICON / EMOJI PRESETS (10 Curated)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              Text("Icon / Emoji Presets:", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+              FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                FloatingButtonPreferences.PRESET_EMOJIS.forEach { (emoji, label) ->
+                  val isSelected = floatingConfig.emoji == emoji
+                  Box(
+                    modifier = Modifier
+                      .clip(RoundedCornerShape(10.dp))
+                      .background(if (isSelected) CyanNeon.copy(alpha = 0.22f) else DarkSurface)
+                      .border(1.dp, if (isSelected) CyanNeon else DarkSurfaceBorder, RoundedCornerShape(10.dp))
+                      .clickable {
+                        FloatingButtonPreferences.updateEmoji(context, emoji)
+                        customEmojiInput = ""
+                      }
+                      .padding(horizontal = 10.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                      Text(text = emoji, fontSize = 15.sp)
+                      Text(
+                        text = label,
+                        color = if (isSelected) CyanNeon else TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                      )
+                    }
+                  }
                 }
               }
             }
 
-            // Dot Opacity Slider
-            Column {
+            // C. CUSTOM EMOJI INPUT
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              Text("Or Custom Emoji:", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                OutlinedTextField(
+                  value = customEmojiInput,
+                  onValueChange = { input ->
+                    if (input.length <= 4) {
+                      customEmojiInput = input
+                      if (input.isNotBlank()) {
+                        FloatingButtonPreferences.updateEmoji(context, input.trim())
+                      }
+                    }
+                  },
+                  placeholder = { Text("Enter emoji (e.g. 🕶️, 📱, 🔋)", color = TextMuted, fontSize = 12.sp) },
+                  singleLine = true,
+                  colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = CyanNeon,
+                    unfocusedBorderColor = DarkSurfaceBorder,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary
+                  ),
+                  modifier = Modifier
+                    .weight(1f)
+                    .testTag("custom_emoji_input")
+                )
+                if (customEmojiInput.isNotBlank()) {
+                  Button(
+                    onClick = {
+                      FloatingButtonPreferences.updateEmoji(context, customEmojiInput.trim())
+                      Toast.makeText(context, "Applied emoji ${customEmojiInput.trim()}", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyanNeon, contentColor = Color.Black),
+                    shape = RoundedCornerShape(10.dp)
+                  ) {
+                    Text("Set", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                  }
+                }
+              }
+            }
+
+            // D. COLOR PALETTE
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              Text("Button Color Palette:", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+              FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                FloatingButtonPreferences.PRESET_COLORS.forEach { (hex, name) ->
+                  val isSelected = floatingConfig.colorHex.equals(hex, ignoreCase = true)
+                  val swatchColor = try {
+                    Color(android.graphics.Color.parseColor(hex))
+                  } catch (_: Exception) {
+                    CyanNeon
+                  }
+                  Box(
+                    modifier = Modifier
+                      .size(36.dp)
+                      .clip(CircleShape)
+                      .background(swatchColor)
+                      .border(
+                        width = if (isSelected) 2.5.dp else 1.dp,
+                        color = if (isSelected) Color.White else DarkSurfaceBorder,
+                        shape = CircleShape
+                      )
+                      .clickable { FloatingButtonPreferences.updateColor(context, hex) },
+                    contentAlignment = Alignment.Center
+                  ) {
+                    if (isSelected) {
+                      Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = name,
+                        tint = if (hex == "#1A1D24") Color.White else Color.Black,
+                        modifier = Modifier.size(18.dp)
+                      )
+                    }
+                  }
+                }
+              }
+            }
+
+            // E. BUTTON SIZE (Small, Medium, Large)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              Text("Button Size:", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                FloatingButtonPreferences.SIZES.forEach { (sz, label) ->
+                  val isSelected = floatingConfig.sizeDp == sz
+                  Box(
+                    modifier = Modifier
+                      .weight(1f)
+                      .clip(RoundedCornerShape(10.dp))
+                      .background(if (isSelected) CyanNeon.copy(alpha = 0.2f) else DarkSurface)
+                      .border(1.dp, if (isSelected) CyanNeon else DarkSurfaceBorder, RoundedCornerShape(10.dp))
+                      .clickable {
+                        FloatingButtonPreferences.updateSize(context, sz)
+                        viewModel.setBlackScreenDotSize(sz)
+                      }
+                      .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    Text(
+                      text = label,
+                      color = if (isSelected) CyanNeon else TextSecondary,
+                      fontSize = 11.sp,
+                      fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    )
+                  }
+                }
+              }
+            }
+
+            // F. OPACITY SLIDER
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
               Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
               ) {
-                Text("Dot Opacity", color = TextSecondary, fontSize = 12.sp)
-                Text("${(dotOpacity * 100).toInt()}%", color = CyanNeon, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Button Opacity", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("${(floatingConfig.opacity * 100).toInt()}%", color = CyanNeon, fontSize = 12.sp, fontWeight = FontWeight.Bold)
               }
               Slider(
-                value = dotOpacity,
-                onValueChange = { viewModel.setBlackScreenDotOpacity(it) },
+                value = floatingConfig.opacity,
+                onValueChange = {
+                  FloatingButtonPreferences.updateOpacity(context, it)
+                  viewModel.setBlackScreenDotOpacity(it)
+                },
                 valueRange = 0.15f..1.0f,
                 colors = SliderDefaults.colors(thumbColor = CyanNeon, activeTrackColor = CyanNeon)
               )
             }
 
-            // Dot Position Reset
+            // G. EDGE-SNAP SAFE INSET
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              Text("Edge-Snap Inset Distance:", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                FloatingButtonPreferences.INSETS.forEach { (inset, label) ->
+                  val isSelected = floatingConfig.edgeInsetDp == inset
+                  Box(
+                    modifier = Modifier
+                      .weight(1f)
+                      .clip(RoundedCornerShape(10.dp))
+                      .background(if (isSelected) CyanNeon.copy(alpha = 0.2f) else DarkSurface)
+                      .border(1.dp, if (isSelected) CyanNeon else DarkSurfaceBorder, RoundedCornerShape(10.dp))
+                      .clickable { FloatingButtonPreferences.updateEdgeInset(context, inset) }
+                      .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    Text(
+                      text = label,
+                      color = if (isSelected) CyanNeon else TextSecondary,
+                      fontSize = 11.sp,
+                      fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    )
+                  }
+                }
+              }
+            }
+
+            // H. ACTIVATION GESTURE ON BUTTON
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              Text("Activation Gesture on Button:", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                val methods = listOf("TAP" to "Single Tap", "DOUBLE_TAP" to "Double Tap", "LONG_PRESS" to "Long Press")
+                methods.forEach { (key, label) ->
+                  val isSelected = activationMethod == key
+                  Box(
+                    modifier = Modifier
+                      .weight(1f)
+                      .clip(RoundedCornerShape(10.dp))
+                      .background(if (isSelected) CyanNeon.copy(alpha = 0.2f) else DarkSurface)
+                      .border(1.dp, if (isSelected) CyanNeon else DarkSurfaceBorder, RoundedCornerShape(10.dp))
+                      .clickable { viewModel.setBlackScreenActivationMethod(key) }
+                      .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    Text(
+                      text = label,
+                      color = if (isSelected) CyanNeon else TextSecondary,
+                      fontSize = 11.sp,
+                      fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    )
+                  }
+                }
+              }
+            }
+
+            // I. SMART EDGE-SNAP INFO & RESET ACTION
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(DarkSurface)
+                .border(1.dp, DarkSurfaceBorder, RoundedCornerShape(10.dp))
+                .padding(12.dp)
+            ) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Icon(Icons.Default.Info, contentDescription = null, tint = CyanNeon, modifier = Modifier.size(16.dp))
+                Text(
+                  text = "Smart Edge-Snap: Freely drag button anywhere. On release, it smoothly snaps to the nearest safe left or right screen edge.",
+                  color = TextMuted,
+                  fontSize = 11.sp,
+                  lineHeight = 15.sp,
+                  modifier = Modifier.weight(1f)
+                )
+              }
+            }
+
+            // Reset to Default Button
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Text("Position: X=$dotX, Y=$dotY (drag to move)", color = TextMuted, fontSize = 11.sp)
+              Text(
+                text = "Snapped: ${floatingConfig.preferredEdge} edge (${floatingConfig.edgeInsetDp}dp inset)",
+                color = TextMuted,
+                fontSize = 11.sp
+              )
               TextButton(
-                onClick = { viewModel.setBlackScreenDotPosition(80, 260) }
+                onClick = {
+                  FloatingButtonPreferences.resetToDefault(context)
+                  viewModel.setBlackScreenDotSize(42)
+                  viewModel.setBlackScreenDotOpacity(0.55f)
+                  customEmojiInput = ""
+                  Toast.makeText(context, "Restored default floating button style", Toast.LENGTH_SHORT).show()
+                }
               ) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp), tint = CyanNeon)
+                Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(15.dp), tint = CyanNeon)
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Reset Position", color = CyanNeon, fontSize = 11.sp)
+                Text("Reset to Default", color = CyanNeon, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
               }
             }
           }
